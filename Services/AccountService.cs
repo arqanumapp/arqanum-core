@@ -1,8 +1,8 @@
 ﻿using ArqanumCore.Crypto;
 using ArqanumCore.Dtos.Account;
 using ArqanumCore.Interfaces;
-using ArqanumCore.InternalModels;
 using ArqanumCore.Storage;
+using ArqanumCore.ViewModels.Account;
 
 namespace ArqanumCore.Services
 {
@@ -12,13 +12,14 @@ namespace ArqanumCore.Services
         ProofOfWorkService proofOfWorkService,
         ICaptchaProvider captchaProvider,
         ApiService apiService,
-        AccountStorage accountStorage)
+        AccountStorage accountStorage,
+        SessionKeyStore sessionKeyStore)
     {
         public async Task<bool> CreateAccount(string username, string? firstName = null, string? lastName = null, IProgress<string>? progress = null)
         {
             try
             {
-                var newAccount = new Account();
+                var newAccount = new InternalModels.Account();
 
                 var (publicKey, privateKey) = mLDsaKeyService.GenerateKey();
 
@@ -55,6 +56,8 @@ namespace ArqanumCore.Services
                     {
                         throw new Exception("Error saving account");
                     }
+
+                    LoadAccount(newAccount.SignaturePrivateKey);
                 }
                 return responce.IsSuccessStatusCode;
             }
@@ -64,19 +67,42 @@ namespace ArqanumCore.Services
                 return false;
             }
         }
+        public async Task<bool> IsUsernameAvailableAsync(string username)
+        {
+            return true; // TODO: Implement actual username availability check
+        }
 
         public async Task<bool> AccountExist()
         {
-            if (await accountStorage.GetAccountAsync() is not null)
+            var account = await accountStorage.GetAccountAsync();
+            if (account is not null)
             {
+                LoadAccount(account.SignaturePrivateKey);
                 return true;
             }
             return false;
         }
 
-        public async Task<Account?> GetAccountAsync()
+        private void LoadAccount(byte[] privateKey) => sessionKeyStore.SetPrivateKey(privateKey);
+
+        public async Task<AccountViewModel> GetAccountAsync()
         {
-            return await accountStorage.GetAccountAsync();
+            var account = await accountStorage.GetAccountAsync();
+            if (account is not null)
+            {
+                return new AccountViewModel
+                {
+                    Username = account.Username,
+                    FirstName = account.FirstName,
+                    LastName = account.LastName,
+                    AccountId = account.AccountId,
+                    Bio = account.Bio
+                };
+            }
+            else
+            {
+                throw new Exception("Account not found");
+            }
         }
     }
 }

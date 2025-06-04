@@ -15,6 +15,6 @@ namespace ArqanumCore.InternalModels
 
         [MaxLength(150)] public string? Bio { get; set; }
 
-        [NotNull] public byte[] SignaturePublicKey { get; set; }
+        [NotNull] public byte[]? SignaturePublicKey { get; set; }
     }
 }

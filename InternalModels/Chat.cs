@@ -14,5 +14,7 @@ namespace ArqanumCore.InternalModels
         [NotNull] public byte[] PrivateKey { get; set; }
 
         [NotNull] public byte[] PeerPublicKey { get; set; }
+
+        public bool IsPinned { get; set; } = false;
     }
 }

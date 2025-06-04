@@ -28,8 +28,12 @@ namespace ArqanumCore
         }
         private static IServiceCollection AddLogicServices(this IServiceCollection services)
         {
+            services.AddSingleton<SessionKeyStore>();
+
             services.AddTransient<ProofOfWorkService>();
             services.AddTransient<AccountService>();
+            services.AddTransient<ContactService>();
+            services.AddTransient<ChatService>();
 
             return services;
         }
@@ -39,12 +43,16 @@ namespace ArqanumCore
             services.AddSingleton<MLDsaKeyService>();
             services.AddSingleton<MLKemKeyService>();
             services.AddSingleton<AesGCMKeyService>();
+
             return services;
         }
 
         private static IServiceCollection AddStorageServices(this IServiceCollection services)
         {
             services.AddSingleton<AccountStorage>();
+            services.AddSingleton<ContactStorage>();
+            services.AddSingleton<ChatStorage>();
+            services.AddSingleton<MessageStorage>();
 
             return services;
         }

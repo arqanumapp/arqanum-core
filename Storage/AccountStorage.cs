@@ -32,5 +32,23 @@ namespace ArqanumCore.Storage
                 return null;
             }
         }
+
+        public async Task<bool> DeleteAccountAsync()
+        {
+            try
+            {
+                await EnsureInitializedAsync();
+                await _database.DeleteAllAsync<Account>();
+                await _database.DeleteAllAsync<Contact>();
+                await _database.DeleteAllAsync<Chat>();
+                await _database.DeleteAllAsync<Message>();
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
     }
 }
