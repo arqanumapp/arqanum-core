@@ -15,7 +15,12 @@ namespace ArqanumCore.Services
         AccountStorage accountStorage,
         SessionKeyStore sessionKeyStore)
     {
-        public async Task<bool> CreateAccount(string username, string? firstName = null, string? lastName = null, IProgress<string>? progress = null)
+        public async Task<bool> CreateAccount(
+            string username,
+            string? firstName = null,
+            string? lastName = null,
+            IProgress<string>? progress = null,
+            CancellationToken cancellationToken = default)
         {
             try
             {
@@ -28,9 +33,14 @@ namespace ArqanumCore.Services
                 newAccount.LastName = lastName;
                 newAccount.SignaturePublicKey = publicKey.GetEncoded();
                 newAccount.SignaturePrivateKey = privateKey.GetEncoded();
-                newAccount.AccountId = Convert.ToBase64String(shakeHashService.ComputeHash256(newAccount.SignaturePublicKey));
+                newAccount.AccountId = Convert.ToBase64String(shakeHashService.ComputeHash256(newAccount.SignaturePublicKey, 64));
 
-                var proofOfWork = proofOfWorkService.FindProof(Convert.ToBase64String(newAccount.SignaturePublicKey));
+                var proofOfWork = await proofOfWorkService.FindProofAsync(
+                    Convert.ToBase64String(newAccount.SignaturePublicKey),
+                    progress,
+                    cancellationToken);
+
+                cancellationToken.ThrowIfCancellationRequested();
 
                 var captchaToken = await captchaProvider.GetCaptchaTokenAsync();
 
@@ -47,9 +57,11 @@ namespace ArqanumCore.Services
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
 
-                var responce = await apiService.PostAsync(newAccountDto, privateKey, "account/register");
+                var response = await apiService.PostAsync(newAccountDto, privateKey, "account/register");
 
-                if (responce.IsSuccessStatusCode)
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (response.IsSuccessStatusCode)
                 {
                     progress?.Report("Registration successful!");
                     if (!await accountStorage.SaveAccountAsync(newAccount))
@@ -59,14 +71,21 @@ namespace ArqanumCore.Services
 
                     LoadAccount(newAccount.SignaturePrivateKey);
                 }
-                return responce.IsSuccessStatusCode;
+
+                return response.IsSuccessStatusCode;
             }
-            catch
+            catch (OperationCanceledException)
             {
-                progress?.Report($"Error creating account");
+                progress?.Report("Account creation canceled.");
+                return false;
+            }
+            catch (Exception)
+            {
+                progress?.Report("Error creating account.");
                 return false;
             }
         }
+
         public async Task<bool> IsUsernameAvailableAsync(string username)
         {
             return true; // TODO: Implement actual username availability check

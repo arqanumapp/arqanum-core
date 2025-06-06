@@ -7,7 +7,7 @@ namespace ArqanumCore.InternalModels
     {
         [PrimaryKey, NotNull] public string AccountId { get; set; }
 
-        [NotNull, MaxLength(50)] public string Username { get; set; }
+        [NotNull, MaxLength(32)] public string Username { get; set; }
 
         [MaxLength(32)] public string? FirstName { get; set; }
 

@@ -9,12 +9,16 @@ namespace ArqanumCore.Crypto
         {
             ArgumentNullException.ThrowIfNull(input);
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(outputLength);
+
             var digest = new ShakeDigest(256);
             digest.BlockUpdate(input, 0, input.Length);
+
             var output = new byte[outputLength];
-            digest.DoFinal(output, 0);
+            digest.OutputFinal(output, 0, outputLength);
             return output;
         }
+
+
         public byte[] ComputeHash128(string input)
         {
             ArgumentNullException.ThrowIfNull(input);
