@@ -3,6 +3,7 @@ using ArqanumCore.Dtos.Account;
 using ArqanumCore.Interfaces;
 using ArqanumCore.Storage;
 using ArqanumCore.ViewModels.Account;
+using System.Text.Json;
 
 namespace ArqanumCore.Services
 {
@@ -88,8 +89,18 @@ namespace ArqanumCore.Services
 
         public async Task<bool> IsUsernameAvailableAsync(string username)
         {
-            return true; // TODO: Implement actual username availability check
+            var requestDto = new UsernameAvailabilityRequestDto { Username = username };
+            var response = await apiService.PostJsonAsync(requestDto, "account/username-available");
+
+            if (!response.IsSuccessStatusCode)
+                return false; 
+
+            using var stream = await response.Content.ReadAsStreamAsync();
+            var responseBody = await JsonSerializer.DeserializeAsync<UsernameAvailabilityResponseDto>(stream);
+
+            return responseBody?.Available ?? false;
         }
+
 
         public async Task<bool> AccountExist()
         {
