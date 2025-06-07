@@ -54,7 +54,7 @@ namespace ArqanumCore.Services
                     SignaturePublicKey = newAccount.SignaturePublicKey,
                     ProofOfWork = proofOfWork.hash,
                     ProofOfWorkNonce = proofOfWork.nonce,
-                    ChaptchaToken = string.Empty,
+                    CaptchaToken = captchaToken,
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
 
@@ -93,10 +93,16 @@ namespace ArqanumCore.Services
             var response = await apiService.PostJsonAsync(requestDto, "account/username-available");
 
             if (!response.IsSuccessStatusCode)
-                return false; 
+                return false;
 
             using var stream = await response.Content.ReadAsStreamAsync();
-            var responseBody = await JsonSerializer.DeserializeAsync<UsernameAvailabilityResponseDto>(stream);
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+
+            var responseBody = await JsonSerializer.DeserializeAsync<UsernameAvailabilityResponseDto>(stream, options);
 
             return responseBody?.Available ?? false;
         }

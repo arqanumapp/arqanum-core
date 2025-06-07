@@ -21,8 +21,7 @@ namespace ArqanumCore
             _ = provider.GetService<IDbPasswordProvider>()
               ?? throw new InvalidOperationException("You must register an implementation of IDbPasswordProvider before calling AddArqanumCore().");
 
-            _ = provider.GetService<ICaptchaProvider>()
-              ?? throw new InvalidOperationException("You must register an implementation of ICaptchaProvider before calling AddArqanumCore().");
+
 
             return services;
         }

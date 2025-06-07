@@ -19,7 +19,7 @@ namespace ArqanumCore.Dtos.Account
 
         [Key(6)] public string ProofOfWorkNonce { get; set; }
 
-        [Key(7)] public string ChaptchaToken { get; set; }
+        [Key(7)] public string CaptchaToken { get; set; }
 
         [Key(8)] public long Timestamp { get; set; }
     }
