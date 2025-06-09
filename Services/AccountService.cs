@@ -64,11 +64,13 @@ namespace ArqanumCore.Services
 
                 if (response.IsSuccessStatusCode)
                 {
-                    progress?.Report("Registration successful!");
+                    var avatarUrl = await response.Content.ReadAsStringAsync(); 
+                    progress?.Report($"Registration successful! Avatar: {avatarUrl}");
+
+                    newAccount.AvatarUrl = avatarUrl; 
+
                     if (!await accountStorage.SaveAccountAsync(newAccount))
-                    {
                         throw new Exception("Error saving account");
-                    }
 
                     LoadAccount(newAccount.SignaturePrivateKey);
                 }
@@ -121,13 +123,28 @@ namespace ArqanumCore.Services
 
         private void LoadAccount(byte[] privateKey) => sessionKeyStore.SetPrivateKey(privateKey);
 
-        public async Task<AccountViewModel> GetAccountAsync()
+        public async Task<string> GetAccountAvatarUrl()
+        {
+            var account = await accountStorage.GetAccountAsync();
+
+            if (account is not null)
+            {
+                return account.AvatarUrl ?? string.Empty;
+            }
+            else
+            {
+                throw new Exception("Account not found");
+            }
+        }
+
+        public async Task<AccountData> GetAccountAsync()
         {
             var account = await accountStorage.GetAccountAsync();
             if (account is not null)
             {
-                return new AccountViewModel
+                return new AccountData
                 {
+                    AvatarUrl = account.AvatarUrl,
                     Username = account.Username,
                     FirstName = account.FirstName,
                     LastName = account.LastName,

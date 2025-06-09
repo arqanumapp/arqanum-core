@@ -9,6 +9,8 @@ namespace ArqanumCore.InternalModels
 
         [NotNull, MaxLength(32)] public string Username { get; set; }
 
+        [NotNull] public string AvatarUrl { get; set; }
+
         [MaxLength(32)] public string? FirstName { get; set; }
 
         [MaxLength(32)] public string? LastName { get; set; }
