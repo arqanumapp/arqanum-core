@@ -58,7 +58,7 @@ namespace ArqanumCore.Services
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
 
-                var response = await apiService.PostAsync(newAccountDto, privateKey, "account/register");
+                var response = await apiService.PostSignBytesAsync(newAccountDto, privateKey, "account/register");
 
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -72,7 +72,7 @@ namespace ArqanumCore.Services
                     if (!await accountStorage.SaveAccountAsync(newAccount))
                         throw new Exception("Error saving account");
 
-                    LoadAccount(newAccount.SignaturePrivateKey);
+                    LoadAccount(newAccount.SignaturePrivateKey, newAccount.AccountId);
                 }
 
                 return response.IsSuccessStatusCode;
@@ -115,13 +115,18 @@ namespace ArqanumCore.Services
             var account = await accountStorage.GetAccountAsync();
             if (account is not null)
             {
-                LoadAccount(account.SignaturePrivateKey);
+                LoadAccount(account.SignaturePrivateKey, account.AccountId);
                 return true;
             }
             return false;
         }
 
-        private void LoadAccount(byte[] privateKey) => sessionKeyStore.SetPrivateKey(privateKey);
+        private void LoadAccount(byte[] privateKey, string accountId)
+        {
+            sessionKeyStore.SetPrivateKey(privateKey);
+
+            sessionKeyStore.SetAccountId(accountId);
+        }
 
         public async Task<string> GetAccountAvatarUrl()
         {

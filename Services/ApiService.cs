@@ -10,7 +10,8 @@ namespace ArqanumCore.Services
     public class ApiService(HttpClient httpClient, MLDsaKeyService mLDsaKey)
     {
         private const string BaseUrl = "https://enigram-001-site1.qtempurl.com/api/";
-        public async Task<HttpResponseMessage> PostAsync<TPayload>(TPayload payload, MLDsaPrivateKeyParameters sPrK, string route)
+
+        public async Task<HttpResponseMessage> PostSignBytesAsync<TPayload>(TPayload payload, MLDsaPrivateKeyParameters sPrK, string route)
         {
             byte[] msgpackBytes = MessagePackSerializer.Serialize(payload);
             var httpContent = new ByteArrayContent(msgpackBytes);

@@ -6,6 +6,8 @@ namespace ArqanumCore.Services
     public class SessionKeyStore(MLDsaKeyService mLDsaKeyService)
     {
         private MLDsaPrivateKeyParameters? _privateKey;
+
+        private string _accountId;
         private readonly object _lock = new();
 
         public MLDsaPrivateKeyParameters? GetPrivateKey()
@@ -13,6 +15,14 @@ namespace ArqanumCore.Services
             lock (_lock)
             {
                 return _privateKey;
+            }
+        }
+
+        public string GetId()
+        {
+            lock (_lock)
+            {
+                return _accountId;
             }
         }
 
@@ -24,11 +34,20 @@ namespace ArqanumCore.Services
             }
         }
 
+        public void SetAccountId(string accountId)
+        {
+            lock (_lock)
+            {
+                _accountId = accountId;
+            }
+        }
+
         public void Clear()
         {
             lock (_lock)
             {
                 _privateKey = null;
+                _accountId = string.Empty;
             }
         }
 
@@ -36,7 +55,7 @@ namespace ArqanumCore.Services
         {
             get
             {
-                lock (_lock) return _privateKey != null;
+                lock (_lock) return _privateKey != null && !string.IsNullOrEmpty(_accountId);
             }
         }
     }

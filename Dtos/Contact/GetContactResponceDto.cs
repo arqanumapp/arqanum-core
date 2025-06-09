@@ -1,7 +1,9 @@
-﻿namespace ArqanumCore.ViewModels.Contact
+﻿namespace ArqanumCore.Dtos.Contact
 {
-    public class GetContactViewModel
+    public class GetContactResponceDto
     {
+        public string AvatarUrl { get; set; }
+
         public string ContactId { get; set; }
 
         public string Username { get; set; }
@@ -11,7 +13,5 @@
         public string? LastName { get; set; }
 
         public string? Bio { get; set; }
-
-        public bool IsConfirmed { get; set; } 
     }
 }
