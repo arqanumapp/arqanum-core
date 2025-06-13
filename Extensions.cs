@@ -30,7 +30,7 @@ namespace ArqanumCore
             services.AddSingleton<SessionKeyStore>();
 
             services.AddTransient<ProofOfWorkService>();
-            services.AddTransient<AccountService>();
+            services.AddSingleton<AccountService>();
             services.AddTransient<ContactService>();
             services.AddTransient<ChatService>();
 

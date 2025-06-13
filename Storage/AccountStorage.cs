@@ -19,6 +19,22 @@ namespace ArqanumCore.Storage
             }
         }
 
+        public async Task<bool> UpdateAccountAsync(Account account)
+        {
+            try
+            {
+                await EnsureInitializedAsync();
+
+                var result = await _database.UpdateAsync(account);
+
+                return result > 0;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
+
         public async Task<Account?> GetAccountAsync()
         {
             try

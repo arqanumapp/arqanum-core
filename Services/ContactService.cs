@@ -50,6 +50,9 @@ namespace ArqanumCore.Services
             if (contact is null)
                 throw new InvalidOperationException("Failed to deserialize contact response");
 
+            if(!TimestampValidator.IsValid(contact.Timestamp))
+                throw new InvalidOperationException("Invalid timestamp in contact response");
+
             return contact;
         }
 

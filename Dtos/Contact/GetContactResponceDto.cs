@@ -13,5 +13,7 @@
         public string? LastName { get; set; }
 
         public string? Bio { get; set; }
+
+        public long Timestamp { get; set; }
     }
 }

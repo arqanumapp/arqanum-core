@@ -20,5 +20,7 @@ namespace ArqanumCore.InternalModels
         [NotNull] public byte[] SignaturePublicKey { get; set; }
 
         [NotNull] public byte[] SignaturePrivateKey { get; set; }
+
+        public long Version { get; set; }
     }
 }

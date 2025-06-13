@@ -1,8 +1,8 @@
 ﻿namespace ArqanumCore.Dtos.Account
 {
-    internal class UsernameAvailabilityRequestDto
+    internal class UpdateFullNameResponseDto
     {
-        public string Username { get; set; }
+        public long Version { get; set; }
 
         public long Timestamp { get; set; }
     }
