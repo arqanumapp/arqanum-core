@@ -30,12 +30,16 @@ namespace ArqanumCore.Services
 
         public async Task<GetContactResponceDto?> FindContactAsync(string identifier)
         {
+            if (string.IsNullOrWhiteSpace(identifier) || sessionKeyStore.GetId() == identifier || sessionKeyStore.GetUsername() == identifier)
+            {
+                return null;
+            }
+
             var payload = new GetContactRequestDto { ContactIdentifier = identifier, Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), AccountId = sessionKeyStore.GetId() };
 
-            using var response = await apiService.PostSignBytesAsync(payload, sPrK: sessionKeyStore.GetPrivateKey()
-                ?? throw new ArgumentNullException(), route: "contact/find-contact");
+            using var response = await apiService.PostSignBytesAsync(payload, sPrK: sessionKeyStore.GetPrivateKey(), route: "contact/find-contact");
 
-            if (!response.IsSuccessStatusCode)
+            if (response is null || !response.IsSuccessStatusCode)
                 return null;
 
             var json = await response.Content.ReadAsStringAsync();
@@ -47,10 +51,7 @@ namespace ArqanumCore.Services
 
             var contact = JsonSerializer.Deserialize<GetContactResponceDto>(json, options);
 
-            if (contact is null)
-                throw new InvalidOperationException("Failed to deserialize contact response");
-
-            if(!TimestampValidator.IsValid(contact.Timestamp))
+            if (!TimestampValidator.IsValid(contact.Timestamp))
                 throw new InvalidOperationException("Invalid timestamp in contact response");
 
             return contact;

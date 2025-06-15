@@ -8,13 +8,32 @@ namespace ArqanumCore.Services
         private MLDsaPrivateKeyParameters? _privateKey;
 
         private string _accountId;
+
+        private string _username;
+
         private readonly object _lock = new();
 
-        public MLDsaPrivateKeyParameters? GetPrivateKey()
+        public MLDsaPrivateKeyParameters GetPrivateKey()
         {
             lock (_lock)
             {
                 return _privateKey;
+            }
+        }
+
+        public void SetUsername(string username)
+        {
+            lock (_lock)
+            {
+                _username = username;
+            }
+        }
+
+        public string GetUsername()
+        {
+            lock (_lock)
+            {
+                return _username;
             }
         }
 

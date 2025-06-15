@@ -4,15 +4,13 @@ using ArqanumCore.Interfaces;
 using ArqanumCore.InternalModels;
 using ArqanumCore.Storage;
 using ArqanumCore.ViewModels.Account;
-using System.Globalization;
 using System.Text.Json;
 
 namespace ArqanumCore.Services
 {
-    public class AccountService(MLDsaKeyService mLDsaKeyService, ShakeHashService shakeHashService, ProofOfWorkService proofOfWorkService, 
+    public class AccountService(MLDsaKeyService mLDsaKeyService, ShakeHashService shakeHashService, ProofOfWorkService proofOfWorkService,
         ICaptchaProvider captchaProvider, ApiService apiService, AccountStorage accountStorage, SessionKeyStore sessionKeyStore)
     {
-
         public AccountViewModel CurrentAccount { get; } = new AccountViewModel();
 
         public async Task<bool> CreateAccount(string username, string? firstName = null, string? lastName = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default)
@@ -51,15 +49,20 @@ namespace ArqanumCore.Services
                     CaptchaToken = captchaToken,
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
-
                 var response = await apiService.PostSignBytesAsync(newAccountDto, privateKey, "account/register");
+
+                if (response is null)
+                {
+                    progress?.Report("Error connecting to server.");
+                    return false;
+                }
 
                 cancellationToken.ThrowIfCancellationRequested();
 
                 if (response.IsSuccessStatusCode)
                 {
                     var avatarUrl = await response.Content.ReadAsStringAsync();
-                    progress?.Report($"Registration successful! Avatar: {avatarUrl}");
+                    progress?.Report($"Registration successful!");
 
                     newAccount.AvatarUrl = avatarUrl;
 
@@ -88,7 +91,7 @@ namespace ArqanumCore.Services
 
             var response = await apiService.PostJsonAsync(requestDto, "account/username-available");
 
-            if (!response.IsSuccessStatusCode)
+            if (response is null || !response.IsSuccessStatusCode)
                 return false;
 
             using var stream = await response.Content.ReadAsStreamAsync();
@@ -100,7 +103,7 @@ namespace ArqanumCore.Services
 
             var responseBody = await JsonSerializer.DeserializeAsync<UsernameAvailabilityResponseDto>(stream, options);
 
-            if(responseBody.Available && TimestampValidator.IsValid(responseBody.Timestamp))
+            if (responseBody.Available && TimestampValidator.IsValid(responseBody.Timestamp))
             {
                 return true;
             }
@@ -125,6 +128,8 @@ namespace ArqanumCore.Services
 
             sessionKeyStore.SetAccountId(account.AccountId);
 
+            sessionKeyStore.SetUsername(account.Username);
+
             CurrentAccount.AvatarUrl = account.AvatarUrl;
             CurrentAccount.Username = account.Username;
             CurrentAccount.FirstName = account.FirstName;
@@ -147,7 +152,7 @@ namespace ArqanumCore.Services
 
             var response = await apiService.PostSignBytesAsync(updateFullNameRequestDto, sPrK: sessionKeyStore.GetPrivateKey(), "account/update-fullname");
 
-            if (response.IsSuccessStatusCode)
+            if (response != null && response.IsSuccessStatusCode)
             {
                 using var stream = await response.Content.ReadAsStreamAsync();
 
@@ -162,49 +167,140 @@ namespace ArqanumCore.Services
                 {
                     var account = await accountStorage.GetAccountAsync();
 
-                    account.FirstName = firstName;
-                    account.LastName = lastName;
+                    account.FirstName = updateFullNameRequestDto.FirstName;
+                    account.LastName = updateFullNameRequestDto.LastName;
                     account.Version = responseBody.Version;
 
                     await accountStorage.UpdateAccountAsync(account);
 
-                    CurrentAccount.FirstName = firstName;
-                    CurrentAccount.LastName = lastName;
+                    CurrentAccount.FirstName = updateFullNameRequestDto.FirstName;
+                    CurrentAccount.LastName = updateFullNameRequestDto.LastName;
 
                     return true;
                 }
-
             }
             return false;
         }
 
         public async Task<bool> UpdateUsernameAsync(string username)
         {
-            var account = await accountStorage.GetAccountAsync();
-            if (account is null)
-                throw new Exception("Account not found");
+            var updateUsernameRequestDto = new UpdateUsernameRequestDto
+            {
+                AccountId = sessionKeyStore.GetId(),
+                NewUsername = username.Trim(),
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            };
 
-            account.Username = username;
-            return await accountStorage.SaveAccountAsync(account);
+            var response = await apiService.PostSignBytesAsync(updateUsernameRequestDto, sPrK: sessionKeyStore.GetPrivateKey(), "account/update-username");
+
+            if (response != null && response.IsSuccessStatusCode)
+            {
+                using var stream = await response.Content.ReadAsStreamAsync();
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var responseBody = await JsonSerializer.DeserializeAsync<UpdateUsernameResponseDto>(stream, options);
+
+                if (TimestampValidator.IsValid(responseBody.Timestamp))
+                {
+                    var account = await accountStorage.GetAccountAsync();
+
+                    account.Username = updateUsernameRequestDto.NewUsername;
+                    account.Version = responseBody.Version;
+
+                    await accountStorage.UpdateAccountAsync(account);
+
+                    CurrentAccount.Username = updateUsernameRequestDto.NewUsername;
+                    await accountStorage.SaveAccountAsync(account);
+                    return true;
+                }
+            }
+            return false;
         }
 
         public async Task<bool> UpdateBioAsync(string bio)
         {
-            var account = await accountStorage.GetAccountAsync();
-            if (account is null)
-                throw new Exception("Account not found");
+            var updateBioRequestDto = new UpdateBioRequestDto
+            {
+                AccountId = sessionKeyStore.GetId(),
+                Bio = bio,
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            };
+                
+            var response = await apiService.PostSignBytesAsync(updateBioRequestDto, sPrK: sessionKeyStore.GetPrivateKey(), "account/update-bio");
 
-            account.Bio = bio;
-            return await accountStorage.SaveAccountAsync(account);
+            if (response != null && response.IsSuccessStatusCode)
+            {
+                using var stream = await response.Content.ReadAsStreamAsync();
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var responseBody = await JsonSerializer.DeserializeAsync<UpdateBioResponseDto>(stream, options);
+
+                if (TimestampValidator.IsValid(responseBody.Timestamp))
+                {
+                    var account = await accountStorage.GetAccountAsync();
+
+
+                    account.Version = responseBody.Version;
+                    account.Bio = updateBioRequestDto.Bio;
+
+                    await accountStorage.UpdateAccountAsync(account);
+
+                    CurrentAccount.Bio = updateBioRequestDto.Bio;
+
+                    return true;
+                }
+            }
+            return false;
         }
 
-        public async Task<bool> UpdateAvatarAsync(string avatarUrl)
+        public async Task<bool> UpdateAvatarAsync(byte[] imageData, string format)
         {
-            var account = await accountStorage.GetAccountAsync();
-            if (account is null)
-                throw new Exception("Account not found");
-            account.AvatarUrl = avatarUrl;
-            return await accountStorage.SaveAccountAsync(account);
+            var updateAvatarRequestDto = new UpdateAvatarRequestDto
+            {
+                AccountId = sessionKeyStore.GetId(),
+                AvatarData = imageData,
+                Format = format.ToLowerInvariant(),
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            };
+
+            var response = await apiService.PostSignBytesAsync(updateAvatarRequestDto, sPrK: sessionKeyStore.GetPrivateKey(), "account/update-avatar");
+
+            if (response != null && response.IsSuccessStatusCode)
+            {
+                using var stream = await response.Content.ReadAsStreamAsync();
+
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                var responseBody = await JsonSerializer.DeserializeAsync<UpdateAvatarResponseDto>(stream, options);
+
+                if (TimestampValidator.IsValid(responseBody.Timestamp))
+                {
+                    var account = await accountStorage.GetAccountAsync();
+
+
+                    account.Version = responseBody.Version;
+
+                    account.AvatarUrl = responseBody.AvatarUrl;
+
+                    await accountStorage.UpdateAccountAsync(account);
+
+                    CurrentAccount.AvatarUrl = responseBody.AvatarUrl;
+
+                    return true;
+                }
+            }
+            return false;
         }
 
         #endregion
