@@ -5,11 +5,12 @@ using ArqanumCore.InternalModels;
 using ArqanumCore.Storage;
 using ArqanumCore.ViewModels.Account;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace ArqanumCore.Services
 {
     public class AccountService(MLDsaKeyService mLDsaKeyService, ShakeHashService shakeHashService, ProofOfWorkService proofOfWorkService,
-        ICaptchaProvider captchaProvider, ApiService apiService, AccountStorage accountStorage, SessionKeyStore sessionKeyStore)
+        ICaptchaProvider captchaProvider, ApiService apiService, AccountStorage accountStorage, SessionKeyStore sessionKeyStore, ISignalRClientService signalRClientService)
     {
         public AccountViewModel CurrentAccount { get; } = new AccountViewModel();
 
@@ -122,7 +123,7 @@ namespace ArqanumCore.Services
             return false;
         }
 
-        private void LoadAccount(Account account)
+        private async Task LoadAccount(Account account)
         {
             sessionKeyStore.SetPrivateKey(account.SignaturePrivateKey);
 
@@ -136,6 +137,10 @@ namespace ArqanumCore.Services
             CurrentAccount.LastName = account.LastName;
             CurrentAccount.AccountId = account.AccountId;
             CurrentAccount.Bio = account.Bio;
+
+            await signalRClientService.StartAsync();
+            var dd = signalRClientService.IsConnected;
+            dd = true;
         }
 
         #region Update Account Methods
