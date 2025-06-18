@@ -7,7 +7,7 @@ namespace ArqanumCore.Dtos.Contact
     {
         [Key(0)] public string RecipientId { get; set; }
 
-        [Key(1)] public AddContactPayload Payload { get; set; }
+        [Key(1)] public byte[] Payload { get; set; }
 
         [Key(2)] public byte[] PayloadSignature { get; set; }
 
@@ -15,10 +15,12 @@ namespace ArqanumCore.Dtos.Contact
     }
 
     [MessagePackObject]
-    internal class AddContactPayload
+    internal class ContactPayload
     {
         [Key(0)] public string SenderId { get; set; }
 
-        [Key(1)] public byte[] SenderPublicKey { get; set; }
+        [Key(1)] public byte[] SignaturePublicKey { get; set; }
+
+        [Key(2)] public byte[] ContactPublicKey { get; set; }
     }
 }

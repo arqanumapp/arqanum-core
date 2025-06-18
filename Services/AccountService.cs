@@ -5,7 +5,6 @@ using ArqanumCore.InternalModels;
 using ArqanumCore.Storage;
 using ArqanumCore.ViewModels.Account;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace ArqanumCore.Services
 {
@@ -117,7 +116,7 @@ namespace ArqanumCore.Services
             var account = await accountStorage.GetAccountAsync();
             if (account is not null)
             {
-                LoadAccount(account);
+                await LoadAccount(account);
                 return true;
             }
             return false;
@@ -130,6 +129,8 @@ namespace ArqanumCore.Services
             sessionKeyStore.SetAccountId(account.AccountId);
 
             sessionKeyStore.SetUsername(account.Username);
+
+            sessionKeyStore.SetPublicKey(account.SignaturePublicKey);
 
             CurrentAccount.AvatarUrl = account.AvatarUrl;
             CurrentAccount.Username = account.Username;
@@ -234,7 +235,7 @@ namespace ArqanumCore.Services
                 Bio = bio,
                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             };
-                
+
             var response = await apiService.PostSignBytesAsync(updateBioRequestDto, sPrK: sessionKeyStore.GetPrivateKey(), "account/update-bio");
 
             if (response != null && response.IsSuccessStatusCode)

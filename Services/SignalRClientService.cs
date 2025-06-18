@@ -18,13 +18,23 @@ namespace ArqanumCore.Services
         event Func<string?, Task>? Reconnected;
     }
 
-    public class SignalRClientService(MLDsaKeyService mLDsaKeyService, SessionKeyStore sessionKeyStore)
-        : ISignalRClientService, IDisposable
+    public class SignalRClientService(MLDsaKeyService mLDsaKeyService, SessionKeyStore sessionKeyStore, ISignalRSubscriptionProcessorService subscriptionProcessor) : ISignalRClientService, IDisposable
     {
         public event Func<Exception?, Task>? Reconnecting;
         public event Func<string?, Task>? Reconnected;
 
         private HubConnection? _connection;
+
+        private void ConfigureSubscriptions()
+        {
+            if (_connection == null)
+                throw new InvalidOperationException("Connection must be initialized");
+
+            _connection.On<byte[]>("Contact", async (data) =>
+            {
+                await subscriptionProcessor.Contact(data);
+            });
+        }
 
         private string GenerateToken()
         {
@@ -77,6 +87,8 @@ namespace ArqanumCore.Services
                             })
                             .WithAutomaticReconnect()
                             .Build();
+
+                        ConfigureSubscriptions();
 
                         _connection.Reconnecting += async (error) =>
                         {

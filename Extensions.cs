@@ -17,6 +17,7 @@ namespace ArqanumCore
             services.AddHttpClient<ApiService>();
 
             services.AddSingleton<ISignalRClientService, SignalRClientService>();
+            services.AddSingleton<ISignalRSubscriptionProcessorService, SignalRSubscriptionProcessorService>();
 
             var provider = services.BuildServiceProvider();
 

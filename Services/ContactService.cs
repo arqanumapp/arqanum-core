@@ -1,10 +1,13 @@
-﻿using ArqanumCore.Dtos.Contact;
+﻿using ArqanumCore.Crypto;
+using ArqanumCore.Dtos.Contact;
+using ArqanumCore.InternalModels;
 using ArqanumCore.Storage;
+using MessagePack;
 using System.Text.Json;
 
 namespace ArqanumCore.Services
 {
-    public class ContactService(ContactStorage contactStorage, ApiService apiService, SessionKeyStore sessionKeyStore)
+    public class ContactService(ContactStorage contactStorage, ApiService apiService, SessionKeyStore sessionKeyStore, MLKemKeyService mLKemKeyService, MLDsaKeyService mLDsaKeyService)
     {
         //public async Task<GetContactViewModel?> GetContactAsync(string contactId)
         //{
@@ -58,9 +61,57 @@ namespace ArqanumCore.Services
         }
 
 
-        public async Task<bool> AddContactAsync(string ContactId)
+        public async Task<bool> AddContactAsync(GetContactResponceDto getContactResponceDto)
         {
-            return true;
+            try
+            {
+                var contact = new Contact();
+                contact.ContactId = getContactResponceDto.ContactId;
+                contact.Username = getContactResponceDto.Username;
+                contact.AvatarUrl = getContactResponceDto.AvatarUrl;
+                contact.FirstName = getContactResponceDto.FirstName;
+                contact.LastName = getContactResponceDto.LastName;
+                contact.Bio = getContactResponceDto.Bio;
+                contact.Version = getContactResponceDto.Version;
+                contact.Status = ContactStatus.Request;
+
+                var (PublicKey, PrivateKey) = mLKemKeyService.GenerateKey();
+
+                contact.MyPublicKey = PublicKey.GetEncoded();
+                contact.MyPrivateKey = PrivateKey.GetEncoded();
+
+                var payload = new ContactPayload
+                {
+                    SenderId = sessionKeyStore.GetId(),
+                    ContactPublicKey = contact.MyPublicKey,
+                    SignaturePublicKey = sessionKeyStore.GetPublicKey().GetEncoded(),
+                };
+                var payloadBytes = MessagePackSerializer.Serialize(payload);
+
+                var payloadBytesSignature = mLDsaKeyService.Sign(payloadBytes, sessionKeyStore.GetPrivateKey());
+
+                var request = new AddContactRequestDto
+                {
+                    RecipientId = contact.ContactId,
+                    Payload = payloadBytes,
+                    PayloadSignature = payloadBytesSignature,
+                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                };
+
+                var response = await apiService.PostSignBytesAsync(request, sPrK: sessionKeyStore.GetPrivateKey(), route: "contact/add-contact");
+
+                if (response != null && response.IsSuccessStatusCode)
+                {
+                    await contactStorage.SaveContactAsync(contact);
+                    return true; 
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         //public async Task<List<GetContactResponceDto>> GetContactsListAsync()
