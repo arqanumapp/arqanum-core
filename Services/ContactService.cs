@@ -1,5 +1,6 @@
 ﻿using ArqanumCore.Crypto;
 using ArqanumCore.Dtos.Contact;
+using ArqanumCore.Interfaces;
 using ArqanumCore.InternalModels;
 using ArqanumCore.Storage;
 using MessagePack;
@@ -7,30 +8,8 @@ using System.Text.Json;
 
 namespace ArqanumCore.Services
 {
-    public class ContactService(ContactStorage contactStorage, ApiService apiService, SessionKeyStore sessionKeyStore, MLKemKeyService mLKemKeyService, MLDsaKeyService mLDsaKeyService)
+    public class ContactService(ContactStorage contactStorage, ApiService apiService, SessionKeyStore sessionKeyStore, MLKemKeyService mLKemKeyService, MLDsaKeyService mLDsaKeyService, ShakeHashService shakeHashService, IShowNotyficationService showNotyficationService)
     {
-        //public async Task<GetContactViewModel?> GetContactAsync(string contactId)
-        //{
-        //    try
-        //    {
-        //        var contact = await contactStorage.GetContactAsync(contactId);
-
-        //        return new GetContactViewModel
-        //        {
-        //            ContactId = contact.ContactId,
-        //            Username = contact.Username,
-        //            FirstName = contact?.FirstName,
-        //            LastName = contact?.LastName,
-        //            Bio = contact?.Bio,
-        //            IsConfirmed = contact.SignaturePublicKey != null
-        //        };
-        //    }
-        //    catch
-        //    {
-        //        return null;
-        //    }
-        //}
-
         public async Task<GetContactResponceDto?> FindContactAsync(string identifier)
         {
             if (string.IsNullOrWhiteSpace(identifier) || sessionKeyStore.GetId() == identifier || sessionKeyStore.GetUsername() == identifier)
@@ -40,7 +19,7 @@ namespace ArqanumCore.Services
 
             var payload = new GetContactRequestDto { ContactIdentifier = identifier, Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), AccountId = sessionKeyStore.GetId() };
 
-            using var response = await apiService.PostSignBytesAsync(payload, sPrK: sessionKeyStore.GetPrivateKey(), route: "contact/find-contact");
+            using var response = await apiService.PostSignBytesAsync(payload, sPrK: sessionKeyStore.GetPrivateKey(), route: "contact/find");
 
             if (response is null || !response.IsSuccessStatusCode)
                 return null;
@@ -60,7 +39,6 @@ namespace ArqanumCore.Services
             return contact;
         }
 
-
         public async Task<bool> AddContactAsync(GetContactResponceDto getContactResponceDto)
         {
             try
@@ -73,7 +51,7 @@ namespace ArqanumCore.Services
                 contact.LastName = getContactResponceDto.LastName;
                 contact.Bio = getContactResponceDto.Bio;
                 contact.Version = getContactResponceDto.Version;
-                contact.Status = ContactStatus.Request;
+                contact.Status = ContactStatus.Pending;
 
                 var (PublicKey, PrivateKey) = mLKemKeyService.GenerateKey();
 
@@ -98,12 +76,12 @@ namespace ArqanumCore.Services
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
                 };
 
-                var response = await apiService.PostSignBytesAsync(request, sPrK: sessionKeyStore.GetPrivateKey(), route: "contact/add-contact");
+                var response = await apiService.PostSignBytesAsync(request, sPrK: sessionKeyStore.GetPrivateKey(), route: "contact/add");
 
                 if (response != null && response.IsSuccessStatusCode)
                 {
                     await contactStorage.SaveContactAsync(contact);
-                    return true; 
+                    return true;
                 }
 
                 return false;
@@ -114,58 +92,49 @@ namespace ArqanumCore.Services
             }
         }
 
-        //public async Task<List<GetContactResponceDto>> GetContactsListAsync()
-        //{
-        //    try
-        //    {
-        //        var contacts = await contactStorage.GetAllContactsAsync();
-        //        return [.. contacts.Where(c => c.SignaturePublicKey != null).Select(c => new GetContactViewModel
-        //        {
-        //            ContactId = c.ContactId,
-        //            Username = c.Username,
-        //            FirstName = c.FirstName,
-        //            LastName = c.LastName,
-        //            Bio = c.Bio,
-        //            IsConfirmed = true,
-        //        })];
-        //    }
-        //    catch
-        //    {
-        //        return [];
-        //    }
-        //}
+        public async Task NewContactRequest(byte[] payload, byte[] payloadSignature)
+        {
+            try
+            {
+                var newContactMessage = MessagePackSerializer.Deserialize<ContactPayload>(payload);
 
-        //public async Task<List<GetContactViewModel>> GetAllRequestContactsAsync()
-        //{
-        //    try
-        //    {
-        //        var contacts = await contactStorage.GetAllContactsAsync();
-        //        return [.. contacts.Where(c => c.SignaturePublicKey == null).Select(c => new GetContactViewModel
-        //        {
-        //            ContactId = c.ContactId,
-        //            Username = c.Username,
-        //            FirstName = c.FirstName,
-        //            LastName = c.LastName,
-        //            Bio = c.Bio,
-        //            IsConfirmed = false
-        //        })];
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return [];
-        //    }
-        //}
+                if (Convert.ToBase64String(shakeHashService.ComputeHash256(newContactMessage.SignaturePublicKey, 64)) != newContactMessage.SenderId)
+                {
+                    return;
+                }
 
-        //public async Task<bool> DeleteContactAsync(string contactId)
-        //{
-        //    try
-        //    {
-        //        return await contactStorage.DeleteContactAsync(contactId);
-        //    }
-        //    catch
-        //    {
-        //        return false;
-        //    }
-        //}
+                if (!mLDsaKeyService.Verify(newContactMessage.SignaturePublicKey, payload, payloadSignature))
+                {
+                    return;
+                }
+
+                var contactInfo = await FindContactAsync(newContactMessage.SenderId);
+
+                if (contactInfo == null)
+                {
+                    return;
+                }
+
+                var contact = new Contact
+                {
+                    ContactId = contactInfo.ContactId,
+                    Username = contactInfo.Username,
+                    AvatarUrl = contactInfo.AvatarUrl,
+                    FirstName = contactInfo.FirstName,
+                    LastName = contactInfo.LastName,
+                    Bio = contactInfo.Bio,
+                    Version = contactInfo.Version,
+                    SignaturePublicKey = newContactMessage.SignaturePublicKey,
+                    ContactPublicKey = newContactMessage.ContactPublicKey,
+                    Status = ContactStatus.Request,
+                };
+                await contactStorage.SaveContactAsync(contact);
+                showNotyficationService.ShowNotificationAsync("New contact request", "Username");
+            }
+            catch
+            {
+                return;
+            }
+        }
     }
 }

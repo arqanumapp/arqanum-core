@@ -34,7 +34,7 @@ namespace ArqanumCore
 
             services.AddTransient<ProofOfWorkService>();
             services.AddSingleton<AccountService>();
-            services.AddTransient<ContactService>();
+            services.AddSingleton<ContactService>();
             services.AddTransient<ChatService>();
 
             return services;

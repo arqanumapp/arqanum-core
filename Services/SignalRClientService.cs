@@ -107,7 +107,6 @@ namespace ArqanumCore.Services
                         _connection.Closed += async (error) =>
                         {
                             Debug.WriteLine($"[SignalR Closed] Reason: {error}");
-                            // Можно добавить авто-рестарт, если нужно
                             await Task.CompletedTask;
                         };
                     }

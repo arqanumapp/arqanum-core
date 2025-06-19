@@ -23,13 +23,13 @@ namespace ArqanumCore.Services
                 }
                 switch (contactBaseMessage.MessageType)
                 {
-                    case ContactHubMessageType.NewContactRequest:
-                        var contactMessage = MessagePackSerializer.Deserialize<ContactPayload>(contactBaseMessage.Payload);
+                    case ContactHubMessageType.NewContactRequest :
+
+                        await contactService.NewContactRequest(contactBaseMessage.Payload, contactBaseMessage.PayloadSignature);
 
                         break;
 
                     case ContactHubMessageType.ConfirmedContactRequest:
-                        var contactUpdateMessage = MessagePackSerializer.Deserialize<ContactPayload>(contactBaseMessage.Payload);
 
                         break;
 
