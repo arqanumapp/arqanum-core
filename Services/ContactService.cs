@@ -7,7 +7,6 @@ using ArqanumCore.ViewModels.Contact;
 using MessagePack;
 using System.Collections.ObjectModel;
 using System.Text.Json;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace ArqanumCore.Services
 {
@@ -18,7 +17,8 @@ namespace ArqanumCore.Services
         MLKemKeyService mLKemKeyService,
         MLDsaKeyService mLDsaKeyService,
         ShakeHashService shakeHashService,
-        IShowNotyficationService showNotyficationService)
+        IShowNotyficationService showNotyficationService,
+        IFileCacheService fileCacheService)
     {
         public ObservableCollection<ContactsItemViewModel> ConfirmedContacts { get; } = [];
         public ObservableCollection<ContactsItemViewModel> PendingContacts { get; } = [];
@@ -54,11 +54,17 @@ namespace ArqanumCore.Services
 
             foreach (var contact in contacts)
             {
+                var cacheFileName = fileCacheService.GetFileNameFromUrl(contact.AvatarUrl, contact.ContactId);
+
+                var localAvatarPath = await fileCacheService.GetOrDownloadFilePathAsync(contact.AvatarUrl, cacheFileName);
+
+                var avatarUrlToUse = localAvatarPath ?? $"{contact.AvatarUrl}?v={contact.Version}";
+
                 var item = new ContactsItemViewModel
                 {
                     ContactId = contact.ContactId,
                     Username = contact.Username,
-                    AvatarUrl = contact.AvatarUrl,
+                    AvatarUrl = $"file:///{avatarUrlToUse.Replace("\\", "/")}",
                     FullName = $"{contact.FirstName} {contact.LastName}".Trim()
                 };
 
@@ -150,10 +156,26 @@ namespace ArqanumCore.Services
 
                 if (response != null && response.IsSuccessStatusCode)
                 {
+
+                    var fileName = fileCacheService.GetFileNameFromUrl(contact.AvatarUrl, contact.ContactId);
+                    var cachedPath = await fileCacheService.GetOrDownloadFilePathAsync(contact.AvatarUrl, fileName);
+
+                    if (!string.IsNullOrEmpty(cachedPath))
+                    {
+                        contact.AvatarUrl = cachedPath;
+                    }
+
                     await contactStorage.SaveContactAsync(contact);
+
+                    PendingContacts.Add(new ContactsItemViewModel
+                    {
+                        ContactId = contact.ContactId,
+                        Username = contact.Username,
+                        AvatarUrl = $"file:///{cachedPath.Replace("\\", "/")}",
+                        FullName = $"{contact.FirstName} {contact.LastName}".Trim(),
+                    });
                     return true;
                 }
-
                 return false;
             }
             catch
