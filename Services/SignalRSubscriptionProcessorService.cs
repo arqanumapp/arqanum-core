@@ -1,5 +1,4 @@
-﻿using ArqanumCore.Dtos.Contact;
-using ArqanumCore.Dtos.Hub.Contact;
+﻿using ArqanumCore.Dtos.Hub.Contact;
 using MessagePack;
 using System.Diagnostics;
 
@@ -23,7 +22,7 @@ namespace ArqanumCore.Services
                 }
                 switch (contactBaseMessage.MessageType)
                 {
-                    case ContactHubMessageType.NewContactRequest :
+                    case ContactHubMessageType.NewContactRequest:
 
                         await contactService.NewContactRequest(contactBaseMessage.Payload, contactBaseMessage.PayloadSignature);
 

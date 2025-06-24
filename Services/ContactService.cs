@@ -3,13 +3,83 @@ using ArqanumCore.Dtos.Contact;
 using ArqanumCore.Interfaces;
 using ArqanumCore.InternalModels;
 using ArqanumCore.Storage;
+using ArqanumCore.ViewModels.Contact;
 using MessagePack;
+using System.Collections.ObjectModel;
 using System.Text.Json;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace ArqanumCore.Services
 {
-    public class ContactService(ContactStorage contactStorage, ApiService apiService, SessionKeyStore sessionKeyStore, MLKemKeyService mLKemKeyService, MLDsaKeyService mLDsaKeyService, ShakeHashService shakeHashService, IShowNotyficationService showNotyficationService)
+    public class ContactService(
+        ContactStorage contactStorage,
+        ApiService apiService,
+        SessionKeyStore sessionKeyStore,
+        MLKemKeyService mLKemKeyService,
+        MLDsaKeyService mLDsaKeyService,
+        ShakeHashService shakeHashService,
+        IShowNotyficationService showNotyficationService)
     {
+        public ObservableCollection<ContactsItemViewModel> ConfirmedContacts { get; } = [];
+        public ObservableCollection<ContactsItemViewModel> PendingContacts { get; } = [];
+        public ObservableCollection<ContactsItemViewModel> RequestContacts { get; } = [];
+        public ObservableCollection<ContactsItemViewModel> BlockedContacts { get; } = [];
+
+        private int _requestContactsCount;
+
+        public int RequestContactsCount
+        {
+            get => _requestContactsCount;
+            set
+            {
+                if (_requestContactsCount != value)
+                {
+                    _requestContactsCount = value;
+                    RequestContactsCountChanged?.Invoke(this, value);
+                }
+            }
+        }
+
+        public event EventHandler<int>? RequestContactsCountChanged;
+
+
+        public async Task<bool> LoadContactsAsync()
+        {
+            var contacts = await contactStorage.GetAllContactsAsync();
+
+            var confirmed = new List<ContactsItemViewModel>();
+            var pending = new List<ContactsItemViewModel>();
+            var requests = new List<ContactsItemViewModel>();
+            var blocked = new List<ContactsItemViewModel>();
+
+            foreach (var contact in contacts)
+            {
+                var item = new ContactsItemViewModel
+                {
+                    ContactId = contact.ContactId,
+                    Username = contact.Username,
+                    AvatarUrl = contact.AvatarUrl,
+                    FullName = $"{contact.FirstName} {contact.LastName}".Trim()
+                };
+
+                switch (contact.Status)
+                {
+                    case ContactStatus.Confirmed: confirmed.Add(item); break;
+                    case ContactStatus.Pending: pending.Add(item); break;
+                    case ContactStatus.Request: requests.Add(item); break;
+                    case ContactStatus.Blocked: blocked.Add(item); break;
+                }
+            }
+
+            ConfirmedContacts.Clear(); foreach (var c in confirmed) ConfirmedContacts.Add(c);
+            PendingContacts.Clear(); foreach (var c in pending) PendingContacts.Add(c);
+            RequestContacts.Clear(); foreach (var c in requests) RequestContacts.Add(c);
+            BlockedContacts.Clear(); foreach (var c in blocked) BlockedContacts.Add(c);
+
+            RequestContactsCount = requests.Count;
+            return true;
+        }
+
         public async Task<GetContactResponceDto?> FindContactAsync(string identifier)
         {
             if (string.IsNullOrWhiteSpace(identifier) || sessionKeyStore.GetId() == identifier || sessionKeyStore.GetUsername() == identifier)
@@ -136,5 +206,7 @@ namespace ArqanumCore.Services
                 return;
             }
         }
+
     }
 }
+

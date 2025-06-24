@@ -28,8 +28,6 @@ namespace ArqanumCore.InternalModels
         [NotNull] public long Version { get; set; }
 
         [NotNull] public ContactStatus Status { get; set; }
-
-        public bool Chekked { get; set; } = false;
     }
 
     public enum ContactStatus

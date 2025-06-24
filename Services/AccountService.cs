@@ -49,6 +49,7 @@ namespace ArqanumCore.Services
                     CaptchaToken = captchaToken,
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
                 };
+
                 var response = await apiService.PostSignBytesAsync(newAccountDto, privateKey, "account/register");
 
                 if (response is null)
@@ -69,7 +70,7 @@ namespace ArqanumCore.Services
                     if (!await accountStorage.SaveAccountAsync(newAccount))
                         throw new Exception("Error saving account");
 
-                    LoadAccount(newAccount);
+                    await LoadAccount(newAccount);
                 }
                 return response.IsSuccessStatusCode;
             }
@@ -139,9 +140,7 @@ namespace ArqanumCore.Services
             CurrentAccount.AccountId = account.AccountId;
             CurrentAccount.Bio = account.Bio;
 
-            await signalRClientService.StartAsync();
-            var dd = signalRClientService.IsConnected;
-            dd = true;
+            //await signalRClientService.StartAsync();
         }
 
         #region Update Account Methods
