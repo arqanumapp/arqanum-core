@@ -20,6 +20,11 @@ namespace ArqanumCore.Services
         IShowNotyficationService showNotyficationService,
         IFileCacheService fileCacheService)
     {
+        private List<ContactsItemViewModel> _allConfirmed = [];
+        private List<ContactsItemViewModel> _allPending = [];
+        private List<ContactsItemViewModel> _allRequests = [];
+        private List<ContactsItemViewModel> _allBlocked = [];
+
         public ObservableCollection<ContactsItemViewModel> ConfirmedContacts { get; } = [];
         public ObservableCollection<ContactsItemViewModel> PendingContacts { get; } = [];
         public ObservableCollection<ContactsItemViewModel> RequestContacts { get; } = [];
@@ -42,7 +47,6 @@ namespace ArqanumCore.Services
 
         public event EventHandler<int>? RequestContactsCountChanged;
 
-
         public async Task<bool> LoadContactsAsync()
         {
             var contacts = await contactStorage.GetAllContactsAsync();
@@ -55,9 +59,7 @@ namespace ArqanumCore.Services
             foreach (var contact in contacts)
             {
                 var cacheFileName = fileCacheService.GetFileNameFromUrl(contact.AvatarUrl, contact.ContactId);
-
                 var localAvatarPath = await fileCacheService.GetOrDownloadFilePathAsync(contact.AvatarUrl, cacheFileName);
-
                 var avatarUrlToUse = localAvatarPath ?? $"{contact.AvatarUrl}?v={contact.Version}";
 
                 var item = new ContactsItemViewModel
@@ -77,18 +79,90 @@ namespace ArqanumCore.Services
                 }
             }
 
-            ConfirmedContacts.Clear(); foreach (var c in confirmed) ConfirmedContacts.Add(c);
-            PendingContacts.Clear(); foreach (var c in pending) PendingContacts.Add(c);
-            RequestContacts.Clear(); foreach (var c in requests) RequestContacts.Add(c);
-            BlockedContacts.Clear(); foreach (var c in blocked) BlockedContacts.Add(c);
+            _allConfirmed = confirmed;
+            _allPending = pending;
+            _allRequests = requests;
+            _allBlocked = blocked;
+
+            ApplyConfirmedFilter("");
+            ApplyPendingFilter("");
+            ApplyRequestFilter("");
+            ApplyBlockedFilter("");
 
             RequestContactsCount = requests.Count;
             return true;
         }
 
+        #region Filters
+
+        public void ApplyPendingFilter(string query)
+        {
+            PendingContacts.Clear();
+            var filtered = _allPending
+                .Where(c =>
+                    string.IsNullOrWhiteSpace(query) ||
+                    c.Username.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    (c.FullName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                .ToList();
+
+            foreach (var contact in filtered)
+                PendingContacts.Add(contact);
+        }
+
+        public void ApplyConfirmedFilter(string query)
+        {
+            ConfirmedContacts.Clear();
+            var filtered = _allConfirmed
+                .Where(c =>
+                    string.IsNullOrWhiteSpace(query) ||
+                    c.Username.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    (c.FullName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                .ToList();
+
+            foreach (var contact in filtered)
+                ConfirmedContacts.Add(contact);
+        }
+
+        public void ApplyRequestFilter(string query)
+        {
+            RequestContacts.Clear();
+            var filtered = _allRequests
+                .Where(c =>
+                    string.IsNullOrWhiteSpace(query) ||
+                    c.Username.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    (c.FullName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                .ToList();
+
+            foreach (var contact in filtered)
+                RequestContacts.Add(contact);
+        }
+
+
+        public void ApplyBlockedFilter(string query)
+        {
+            BlockedContacts.Clear();
+            var filtered = _allBlocked
+                .Where(c =>
+                    string.IsNullOrWhiteSpace(query) ||
+                    c.Username.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    (c.FullName?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))
+                .ToList();
+
+            foreach (var contact in filtered)
+                BlockedContacts.Add(contact);
+        }
+
+        #endregion
+
         public async Task<GetContactResponceDto?> FindContactAsync(string identifier)
         {
             if (string.IsNullOrWhiteSpace(identifier) || sessionKeyStore.GetId() == identifier || sessionKeyStore.GetUsername() == identifier)
+            {
+                return null;
+            }
+            var localContact = await contactStorage.GetContactAsync(identifier);
+
+            if (localContact != null)
             {
                 return null;
             }
@@ -119,6 +193,13 @@ namespace ArqanumCore.Services
         {
             try
             {
+                var existingContact = await contactStorage.GetContactAsync(getContactResponceDto.ContactId);
+
+                if (existingContact != null)
+                {
+                    return false;
+                }
+
                 var contact = new Contact();
                 contact.ContactId = getContactResponceDto.ContactId;
                 contact.Username = getContactResponceDto.Username;
@@ -156,7 +237,6 @@ namespace ArqanumCore.Services
 
                 if (response != null && response.IsSuccessStatusCode)
                 {
-
                     var fileName = fileCacheService.GetFileNameFromUrl(contact.AvatarUrl, contact.ContactId);
                     var cachedPath = await fileCacheService.GetOrDownloadFilePathAsync(contact.AvatarUrl, fileName);
 
@@ -167,13 +247,17 @@ namespace ArqanumCore.Services
 
                     await contactStorage.SaveContactAsync(contact);
 
-                    PendingContacts.Add(new ContactsItemViewModel
+                    var newPendingContact = new ContactsItemViewModel
                     {
                         ContactId = contact.ContactId,
                         Username = contact.Username,
-                        AvatarUrl = $"file:///{cachedPath.Replace("\\", "/")}",
+                        AvatarUrl = $"file:///{contact.AvatarUrl.Replace("\\", "/")}",
                         FullName = $"{contact.FirstName} {contact.LastName}".Trim(),
-                    });
+                    };
+
+                    _allPending.Add(newPendingContact);
+                    PendingContacts.Add(newPendingContact);
+
                     return true;
                 }
                 return false;
@@ -189,6 +273,12 @@ namespace ArqanumCore.Services
             try
             {
                 var newContactMessage = MessagePackSerializer.Deserialize<ContactPayload>(payload);
+                var localContact = await contactStorage.GetContactAsync(newContactMessage.SenderId);
+
+                if (localContact != null)
+                {
+                    return;
+                }
 
                 if (Convert.ToBase64String(shakeHashService.ComputeHash256(newContactMessage.SignaturePublicKey, 64)) != newContactMessage.SenderId)
                 {
@@ -220,8 +310,22 @@ namespace ArqanumCore.Services
                     ContactPublicKey = newContactMessage.ContactPublicKey,
                     Status = ContactStatus.Request,
                 };
+
                 await contactStorage.SaveContactAsync(contact);
-                showNotyficationService.ShowNotificationAsync("New contact request", "Username");
+
+                showNotyficationService.ShowNotificationAsync("New contact request", contactInfo.Username);
+
+                var newRequest = new ContactsItemViewModel
+                {
+                    ContactId = contact.ContactId,
+                    Username = contact.Username,
+                    AvatarUrl = $"file:///{contact.AvatarUrl.Replace("\\", "/")}",
+                    FullName = $"{contact.FirstName} {contact.LastName}".Trim(),
+                };
+
+                _allRequests.Add(newRequest);
+                RequestContacts.Add(newRequest);
+                RequestContactsCount = _allRequests.Count;
             }
             catch
             {
@@ -229,6 +333,170 @@ namespace ArqanumCore.Services
             }
         }
 
+        #region Requests Contacts Methods
+
+        public async Task<bool> ConfirmContactAsync(ContactsItemViewModel contact)
+        {
+            try
+            {
+                var localContact = await contactStorage.GetContactAsync(contact.ContactId);
+
+                if (localContact == null || localContact.Status != ContactStatus.Request)
+                {
+                    return false;
+                }
+
+                localContact.Status = ContactStatus.Confirmed;
+                //TODO: Send confirmation message to the contact
+                //await contactStorage.SaveContactAsync(localContact);
+
+                _allConfirmed.Add(contact);
+                _allRequests.Remove(contact);
+
+                ConfirmedContacts.Add(contact);
+                RequestContacts.Remove(contact);
+
+                RequestContactsCount = _allRequests.Count;
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> RejectContactAsync(ContactsItemViewModel contact)
+        {
+            try
+            {
+                var localContact = await contactStorage.GetContactAsync(contact.ContactId);
+                if (localContact == null || localContact.Status != ContactStatus.Request)
+                {
+                    return false;
+                }
+                //await contactStorage.SaveContactAsync(localContact);
+                _allRequests.Remove(contact);
+                RequestContacts.Remove(contact);
+                RequestContactsCount = _allRequests.Count;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> RejectAndBlockContactRequestAsync(ContactsItemViewModel contact)
+        {
+            try
+            {
+                var localContact = await contactStorage.GetContactAsync(contact.ContactId);
+                if (localContact == null || localContact.Status != ContactStatus.Request)
+                {
+                    return false;
+                }
+                localContact.Status = ContactStatus.Blocked;
+                //await contactStorage.SaveContactAsync(localContact);
+                _allBlocked.Add(contact);
+                _allRequests.Remove(contact);
+                BlockedContacts.Add(contact);
+                RequestContacts.Remove(contact);
+                RequestContactsCount = _allRequests.Count;
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        #endregion
+
+        #region Confirmed Contacts Methods
+
+        public async Task<bool> DeleteContactAsync(ContactsItemViewModel contact)
+        {
+            try
+            {
+                var localContact = await contactStorage.GetContactAsync(contact.ContactId);
+
+                if (localContact == null || localContact.Status != ContactStatus.Confirmed)
+                {
+                    return false;
+                }
+
+                //await contactStorage.DeleteContactAsync(localContact.ContactId);
+
+                _allConfirmed.Remove(contact);
+                ConfirmedContacts.Remove(contact);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> BlockContactAsync(ContactsItemViewModel contact)
+        {
+            try
+            {
+                var localContact = await contactStorage.GetContactAsync(contact.ContactId);
+                if (localContact == null || localContact.Status != ContactStatus.Confirmed)
+                {
+                    return false;
+                }
+                localContact.Status = ContactStatus.Blocked;
+                //await contactStorage.SaveContactAsync(localContact);
+                _allBlocked.Add(contact);
+                _allConfirmed.Remove(contact);
+                BlockedContacts.Add(contact);
+                ConfirmedContacts.Remove(contact);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        #endregion
+
+        #region Blocked Contacts Methods
+
+        public async Task<bool> UnblockContactAsync(ContactsItemViewModel contact)
+        {
+            try
+            {
+                var localContact = await contactStorage.GetContactAsync(contact.ContactId);
+                if (localContact == null || localContact.Status != ContactStatus.Blocked)
+                {
+                    return false;
+                }
+                if(localContact.ContactPublicKey != null && localContact.SignaturePublicKey != null && localContact.MyPublicKey != null && localContact.MyPrivateKey != null)
+                {
+                    localContact.Status = ContactStatus.Confirmed;
+                    _allConfirmed.Add(contact);
+                    ConfirmedContacts.Add(contact);
+                    //await contactStorage.SaveContactAsync(localContact);
+                }
+                else
+                {
+                    //await contactStorage.DeleteContactAsync(localContact.ContactId);
+                }
+                _allBlocked.Remove(contact);
+                BlockedContacts.Remove(contact);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        #endregion
     }
 }
 

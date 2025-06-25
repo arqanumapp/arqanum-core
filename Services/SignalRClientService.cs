@@ -56,7 +56,6 @@ namespace ArqanumCore.Services
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"[SignalRClientService:GenerateToken] Error: {ex}");
                 throw;
             }
         }

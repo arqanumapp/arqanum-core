@@ -9,7 +9,7 @@ using System.Text.Json;
 namespace ArqanumCore.Services
 {
     public class AccountService(MLDsaKeyService mLDsaKeyService, ShakeHashService shakeHashService, ProofOfWorkService proofOfWorkService,
-        ICaptchaProvider captchaProvider, ApiService apiService, AccountStorage accountStorage, SessionKeyStore sessionKeyStore, ISignalRClientService signalRClientService)
+        ICaptchaProvider captchaProvider, ApiService apiService, AccountStorage accountStorage, SessionKeyStore sessionKeyStore, ISignalRClientService signalRClientService, IFileCacheService fileCacheService)
     {
         public AccountViewModel CurrentAccount { get; } = new AccountViewModel();
 
@@ -63,12 +63,18 @@ namespace ArqanumCore.Services
                 if (response.IsSuccessStatusCode)
                 {
                     var avatarUrl = await response.Content.ReadAsStringAsync();
-                    progress?.Report($"Registration successful!");
 
-                    newAccount.AvatarUrl = avatarUrl;
+                    var fileName = fileCacheService.GetFileNameFromUrl(avatarUrl);
+                    var cachedAvatarPath = await fileCacheService.GetOrDownloadFilePathAsync(avatarUrl, fileName);
+
+                    newAccount.AvatarUrl = cachedAvatarPath;
+
+                    progress?.Report($"Registration successful!");
 
                     if (!await accountStorage.SaveAccountAsync(newAccount))
                         throw new Exception("Error saving account");
+
+                    progress?.Report($"Loading...");
 
                     await LoadAccount(newAccount);
                 }
@@ -133,14 +139,14 @@ namespace ArqanumCore.Services
 
             sessionKeyStore.SetPublicKey(account.SignaturePublicKey);
 
-            CurrentAccount.AvatarUrl = account.AvatarUrl;
+            CurrentAccount.AvatarUrl = $"file:///{account.AvatarUrl.Replace("\\", "/")}";
             CurrentAccount.Username = account.Username;
             CurrentAccount.FirstName = account.FirstName;
             CurrentAccount.LastName = account.LastName;
             CurrentAccount.AccountId = account.AccountId;
             CurrentAccount.Bio = account.Bio;
 
-            //await signalRClientService.StartAsync();
+            await signalRClientService.StartAsync();
         }
 
         #region Update Account Methods
@@ -293,14 +299,21 @@ namespace ArqanumCore.Services
                 {
                     var account = await accountStorage.GetAccountAsync();
 
-
                     account.Version = responseBody.Version;
 
-                    account.AvatarUrl = responseBody.AvatarUrl;
+                    string fileName = Path.GetFileName(account.AvatarUrl);
+
+                    var res = await fileCacheService.DeleteCachedFileAsync(fileName);
+
+                    var newFileName = fileCacheService.GetFileNameFromUrl(responseBody.AvatarUrl);
+
+                    var cachedAvatarPath = await fileCacheService.GetOrDownloadFilePathAsync(responseBody.AvatarUrl, newFileName);
+
+                    account.AvatarUrl = cachedAvatarPath;
 
                     await accountStorage.UpdateAccountAsync(account);
 
-                    CurrentAccount.AvatarUrl = responseBody.AvatarUrl;
+                    CurrentAccount.AvatarUrl = account.AvatarUrl;
 
                     return true;
                 }
